@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.diagnostics import collect_diagnostics
 from app.db import init_db
 from app.lxmf_service import service
 from app.repository import get_message, list_messages
@@ -52,6 +53,11 @@ async def send_form(request: Request):
     return render(request, "send.html", error=None, success=None)
 
 
+@app.get("/diagnostics", response_class=HTMLResponse)
+async def diagnostics(request: Request):
+    return render(request, "diagnostics.html", diagnostics=collect_diagnostics(), title="Diagnostics")
+
+
 @app.get("/messages/{message_id}", response_class=HTMLResponse)
 async def message_details(request: Request, message_id: int):
     message = get_message(message_id)
@@ -87,3 +93,8 @@ async def inbox_api():
 @app.get("/api/outbox")
 async def outbox_api():
     return list_messages("outbox")
+
+
+@app.get("/api/diagnostics")
+async def diagnostics_api():
+    return collect_diagnostics()

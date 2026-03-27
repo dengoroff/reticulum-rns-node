@@ -207,14 +207,7 @@ class LXMFService:
         return self._pretty_hex(self.destination.hash)
 
     def stats(self) -> dict[str, Any]:
-        configured_peers = [
-            peer.strip()
-            for peer in os.environ.get(
-                "RNS_PEERS",
-                "amsterdam.connect.reticulum.network:4965,reticulum.betweentheborders.com:4242,rns.quad4.io:4242",
-            ).split(",")
-            if peer.strip()
-        ]
+        configured_peers = self._configured_peers()
         return {
             "address": self.address,
             "display_name": self.display_name,
@@ -338,6 +331,23 @@ class LXMFService:
     @staticmethod
     def _log(message: str, level: int = RNS.LOG_NOTICE) -> None:
         RNS.log(f"[web-ui] {message}", level)
+
+    def _configured_peers(self) -> list[str]:
+        env_peers = os.environ.get("RNS_PEERS")
+        if env_peers:
+            return [peer.strip() for peer in env_peers.split(",") if peer.strip()]
+
+        peers_file = Path("/app/config/bootstrap_peers.txt")
+        if not peers_file.exists():
+            return []
+
+        peers = []
+        for raw_line in peers_file.read_text().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            peers.append(line)
+        return peers
 
 
 service = LXMFService()

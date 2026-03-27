@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "config"
 RNS_CONFIG_DIR = Path(os.environ["RNS_CONFIG_DIR"])
 LXMD_CONFIG_DIR = Path(os.environ["LXMD_CONFIG_DIR"])
+BOOTSTRAP_PEERS_FILE = CONFIG_DIR / "bootstrap_peers.txt"
 
 
 def parse_bool(value: str | None, default: bool) -> bool:
@@ -29,14 +30,26 @@ def parse_peers(value: str) -> list[dict[str, str]]:
     return peers
 
 
+def load_default_peers() -> list[dict[str, str]]:
+    if not BOOTSTRAP_PEERS_FILE.exists():
+        return []
+
+    items = []
+    for raw_line in BOOTSTRAP_PEERS_FILE.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        host, _, port = line.partition(":")
+        if not host:
+            continue
+        items.append({"host": host.strip(), "port": port.strip() or "4242"})
+    return items
+
+
 def render_reticulum() -> str:
     template = (CONFIG_DIR / "reticulum.template.conf").read_text()
-    peers = parse_peers(
-        os.environ.get(
-            "RNS_PEERS",
-            "amsterdam.connect.reticulum.network:4965,reticulum.betweentheborders.com:4242,rns.quad4.io:4242",
-        )
-    )
+    env_peers = os.environ.get("RNS_PEERS")
+    peers = parse_peers(env_peers) if env_peers else load_default_peers()
     enable_server = parse_bool(os.environ.get("RNS_ENABLE_SERVER"), True)
     enable_discovery = parse_bool(os.environ.get("RNS_ENABLE_DISCOVERY"), True)
     lines = []

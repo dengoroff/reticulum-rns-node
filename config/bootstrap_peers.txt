@@ -1,0 +1,12 @@
+# One peer per line in host:port format.
+# Blank lines and comments are ignored.
+#
+# These defaults are based on the community entrypoints listed on
+# reticulum.network and are intentionally spread across different
+# hosts and ports for better odds of connectivity from restrictive
+# networks.
+
+reticulum.rocket-tech.net:443
+reticulum.tidudanka.com:37500
+202.61.243.41:4965
+45.77.109.86:4965

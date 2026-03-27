@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <div class="panel-header detail-header">
+    <div>
+      <h2>Diagnostics</h2>
+      <p class="meta-line">Live Reticulum inspection from inside the container.</p>
+    </div>
+    <a class="action-link" href="/diagnostics">Refresh</a>
+  </div>
+
+  <div class="diag-section">
+    <h3>Rendered Config</h3>
+    <p class="meta-line">{{ diagnostics.config_path }}</p>
+    <pre class="diag-pre">{{ diagnostics.config }}</pre>
+  </div>
+
+  <div class="diag-section">
+    <h3>rnstatus</h3>
+    <pre class="diag-pre">{{ diagnostics.rnstatus }}</pre>
+  </div>
+
+  <div class="diag-section">
+    <h3>rnpath -t</h3>
+    <pre class="diag-pre">{{ diagnostics.rnpath }}</pre>
+  </div>
+
+  <div class="diag-section">
+    <h3>Bootstrap DNS</h3>
+    <pre class="diag-pre">{{ diagnostics.dns }}</pre>
+  </div>
+
+  <div class="diag-section">
+    <h3>Bootstrap TCP Connectivity</h3>
+    <pre class="diag-pre">{{ diagnostics.tcp }}</pre>
+  </div>
+</section>
+{% endblock %}

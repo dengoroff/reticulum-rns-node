@@ -226,6 +226,22 @@ button {
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
 }
 
+.diag-section + .diag-section {
+  margin-top: 20px;
+}
+
+.diag-pre {
+  margin: 8px 0 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
 @media (max-width: 800px) {
   .shell {
     grid-template-columns: 1fr;
