@@ -25,6 +25,7 @@ class LXMFService:
         self.started_at = time.time()
         self.lock = threading.Lock()
         self.announce_thread: threading.Thread | None = None
+        self.startup_announce_thread: threading.Thread | None = None
 
     def start(self) -> None:
         with self.lock:
@@ -44,13 +45,14 @@ class LXMFService:
                 stamp_cost=8,
             )
             self.router.register_delivery_callback(self._on_delivery)
-            self.router.announce(self.destination.hash)
             self._log(
                 f"Registered LXMF delivery identity {self.address} with display name '{self.display_name}'"
             )
-            self._log("Initial LXMF announce sent")
+            self._emit_announce("initial")
             self.announce_thread = threading.Thread(target=self._announce_loop, daemon=True)
             self.announce_thread.start()
+            self.startup_announce_thread = threading.Thread(target=self._startup_announce_loop, daemon=True)
+            self.startup_announce_thread.start()
 
     def _load_or_create_identity(self) -> RNS.Identity:
         identity_path = self.data_path / "web-ui.identity"
@@ -67,12 +69,20 @@ class LXMFService:
             time.sleep(max(self.announce_interval, 300))
             try:
                 if self.router and self.destination:
-                    self._log(
-                        f"Sending periodic LXMF announce for {self.address}, interval {self.announce_interval}s"
-                    )
-                    self.router.announce(self.destination.hash)
+                    self._emit_announce(f"periodic interval={self.announce_interval}s")
             except Exception:
                 RNS.log("Failed to announce LXMF destination", RNS.LOG_ERROR)
+
+    def _startup_announce_loop(self) -> None:
+        elapsed = 0
+        for delay in (15, 60):
+            time.sleep(delay - elapsed)
+            elapsed = delay
+            try:
+                if self.router and self.destination:
+                    self._emit_announce(f"startup-delay {delay}s")
+            except Exception:
+                self._log(f"Failed delayed announce after {delay}s", level=RNS.LOG_ERROR)
 
     def _on_delivery(self, message: LXMF.LXMessage) -> None:
         content = self._as_string(message.content_as_string)
@@ -304,6 +314,12 @@ class LXMFService:
             f"hash={self._pretty_hex(getattr(message, 'hash', None))}",
             level=RNS.LOG_ERROR,
         )
+
+    def _emit_announce(self, reason: str) -> None:
+        if not self.router or not self.destination:
+            return
+        self.router.announce(self.destination.hash)
+        self._log(f"LXMF announce sent for {self.address} reason={reason}")
 
     @staticmethod
     def _state_name(state: int | None) -> str:
