@@ -2,7 +2,6 @@
 {% block content %}
 <section class="panel">
   <h2>Send Message</h2>
-  <p class="meta-line">Embedded attachments are limited to {{ attachment_limit_bytes|filesize }} total per message.</p>
   {% if error %}
   <div class="notice error">{{ error }}</div>
   {% endif %}

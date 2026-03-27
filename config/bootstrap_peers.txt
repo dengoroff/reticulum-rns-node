@@ -15,3 +15,10 @@ rns.bastet.io:4242
 rns.c3at.de:4242
 rns.voidnetwork.net:4242
 reticulum.teapot.cx:4242
+rns.acehoss.net:4242
+rns.beleth.net:4242
+firezen.com:4242
+dfw.us.g00n.cloud:6969
+intr.cx:4242
+rns.jlamothe.net:4242
+rns.quad4.io:4242

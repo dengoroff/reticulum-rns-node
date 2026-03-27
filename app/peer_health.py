@@ -158,6 +158,10 @@ def format_tcp_report(health: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def load_peer_health(cache_path: Path | None = None) -> list[dict[str, Any]]:
+    return _load_cache(cache_path or HEALTH_CACHE_PATH)
+
+
 def _parse_env_peers(value: str) -> list[dict[str, Any]]:
     items = []
     for raw in value.split(","):

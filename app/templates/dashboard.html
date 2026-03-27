@@ -100,6 +100,21 @@
   {% endif %}
 </section>
 <section class="panel peer-panel">
+  <h2>Online Peers</h2>
+  {% if online_peers %}
+  <ul class="peer-list">
+    {% for peer in online_peers %}
+    <li>
+      <strong>{{ peer.peer }}</strong>
+      <span class="meta-line">Last success: {{ peer.last_success_at|datetime_ts }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No online peers in the latest health snapshot.</p>
+  {% endif %}
+</section>
+<section class="panel peer-panel">
   <h2>Bootstrap Peers</h2>
   <ul class="peer-list">
     {% for peer in stats.configured_peers %}

@@ -18,6 +18,7 @@ import qrcode.image.svg
 from app.diagnostics import collect_diagnostics
 from app.db import init_db
 from app.lxmf_service import service
+from app.peer_health import load_peer_health
 from app.repository import count_messages, delete_message as delete_message_record, get_message, list_messages
 
 
@@ -52,7 +53,9 @@ def render(request: Request, template: str, **context):
 async def dashboard(request: Request):
     stats = service.stats()
     qr_svg = generate_qr_svg(f"lxmf://{stats['address']}") if stats.get("address") else None
-    return render(request, "dashboard.html", stats=stats, qr_svg=qr_svg)
+    online_peers = [peer for peer in load_peer_health() if peer.get("tcp_ok")]
+    online_peers.sort(key=lambda item: item.get("last_success_at") or 0, reverse=True)
+    return render(request, "dashboard.html", stats=stats, qr_svg=qr_svg, online_peers=online_peers)
 
 
 @app.get("/inbox", response_class=HTMLResponse)
