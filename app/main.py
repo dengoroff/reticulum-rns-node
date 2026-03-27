@@ -5,7 +5,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from io import BytesIO
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,7 +15,7 @@ import qrcode.image.svg
 from app.diagnostics import collect_diagnostics
 from app.db import init_db
 from app.lxmf_service import service
-from app.repository import get_message, list_messages
+from app.repository import count_messages, delete_message as delete_message_record, get_message, list_messages
 
 
 BASE_DIR = os.path.dirname(__file__)
@@ -50,13 +50,13 @@ async def dashboard(request: Request):
 
 
 @app.get("/inbox", response_class=HTMLResponse)
-async def inbox(request: Request):
-    return render(request, "messages.html", title="Inbox", messages=list_messages("inbox"))
+async def inbox(request: Request, page: int = Query(1, ge=1)):
+    return render_messages_page(request, "Inbox", "inbox", page)
 
 
 @app.get("/outbox", response_class=HTMLResponse)
-async def outbox(request: Request):
-    return render(request, "messages.html", title="Outbox", messages=list_messages("outbox"))
+async def outbox(request: Request, page: int = Query(1, ge=1)):
+    return render_messages_page(request, "Outbox", "outbox", page)
 
 
 @app.get("/send", response_class=HTMLResponse)
@@ -93,6 +93,16 @@ async def retry_message(message_id: int):
 async def cancel_message(message_id: int):
     service.cancel_message(message_id)
     return RedirectResponse(url=f"/messages/{message_id}", status_code=303)
+
+
+@app.post("/messages/{message_id}/delete")
+async def delete_message(message_id: int):
+    message = get_message(message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    redirect_to = f"/{message['direction']}"
+    delete_message_record(message_id)
+    return RedirectResponse(url=redirect_to, status_code=303)
 
 
 @app.post("/send", response_class=HTMLResponse)
@@ -137,3 +147,24 @@ def generate_qr_svg(value: str) -> str:
     buffer = BytesIO()
     image.save(buffer)
     return buffer.getvalue().decode("utf-8")
+
+
+def render_messages_page(request: Request, title: str, direction: str, page: int):
+    per_page = 10
+    total = count_messages(direction)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+    messages = list_messages(direction, limit=per_page, offset=offset)
+    return render(
+        request,
+        "messages.html",
+        title=title,
+        messages=messages,
+        page=page,
+        per_page=per_page,
+        total=total,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+    )

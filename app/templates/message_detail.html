@@ -17,6 +17,13 @@
         <button type="submit" class="secondary-button">Cancel</button>
       </form>
       {% endif %}
+      <form
+        method="post"
+        action="/messages/{{ message.id }}/delete"
+        onsubmit="return confirm('Delete this message?');"
+      >
+        <button type="submit" class="secondary-button danger-button">Delete</button>
+      </form>
       <a class="action-link" href="/{{ message.direction }}">Back</a>
     </div>
   </div>

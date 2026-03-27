@@ -55,7 +55,7 @@ def update_message(message_id: int, **updates: Any) -> None:
         conn.execute(f"UPDATE messages SET {assignments} WHERE id = :id", updates)
 
 
-def list_messages(direction: str, limit: int = 100) -> list[dict[str, Any]]:
+def list_messages(direction: str, limit: int = 10, offset: int = 0) -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(
             """
@@ -63,10 +63,24 @@ def list_messages(direction: str, limit: int = 100) -> list[dict[str, Any]]:
             WHERE direction = ?
             ORDER BY created_at DESC
             LIMIT ?
+            OFFSET ?
             """,
-            (direction, limit),
+            (direction, limit, offset),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def count_messages(direction: str) -> int:
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM messages
+            WHERE direction = ?
+            """,
+            (direction,),
+        ).fetchone()
+    return int(row["count"]) if row else 0
 
 
 def get_message(message_id: int) -> dict[str, Any] | None:
@@ -79,6 +93,11 @@ def get_message(message_id: int) -> dict[str, Any] | None:
             (message_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def delete_message(message_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
 
 
 def pop_next_outbound_message() -> dict[str, Any] | None:

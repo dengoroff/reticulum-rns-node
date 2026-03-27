@@ -17,9 +17,10 @@
           {% if title != "Inbox" %}
           <th>Destination</th>
           {% endif %}
+          <th>Updated</th>
           <th>Title</th>
           <th>Content</th>
-          <th></th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -33,6 +34,7 @@
           {% if title != "Inbox" %}
           <td>{{ message.destination_hash or "-" }}</td>
           {% endif %}
+          <td>{{ message.updated_at|datetime_ts }}</td>
           <td>{{ message.title or "-" }}</td>
           <td>
             {% if message.content|length > 30 %}
@@ -41,12 +43,36 @@
               {{ message.content }}
             {% endif %}
           </td>
-          <td><a class="action-link" href="/messages/{{ message.id }}">View</a></td>
+          <td>
+            <div class="action-row">
+              <a class="action-link" href="/messages/{{ message.id }}">View</a>
+              <form
+                method="post"
+                action="/messages/{{ message.id }}/delete"
+                onsubmit="return confirm('Delete this message?');"
+              >
+                <button type="submit" class="secondary-button danger-button">Delete</button>
+              </form>
+            </div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    <span class="meta-line">Page {{ page }} of {{ total_pages }}. Total messages: {{ total }}</span>
+    <div class="action-row">
+      {% if has_prev %}
+      <a class="action-link" href="?page={{ page - 1 }}">Previous</a>
+      {% endif %}
+      {% if has_next %}
+      <a class="action-link" href="?page={{ page + 1 }}">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
   {% else %}
   <p class="empty">No messages yet.</p>
   {% endif %}
