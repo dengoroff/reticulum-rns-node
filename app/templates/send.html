@@ -2,10 +2,11 @@
 {% block content %}
 <section class="panel">
   <h2>Send Message</h2>
+  <p class="meta-line">Embedded attachments are limited to {{ attachment_limit_bytes|filesize }} total per message.</p>
   {% if error %}
   <div class="notice error">{{ error }}</div>
   {% endif %}
-  <form method="post" class="form">
+  <form method="post" class="form" enctype="multipart/form-data">
     <label>
       <span>Destination address</span>
       <input type="text" name="destination" placeholder="16-byte LXMF destination hash" required />
@@ -18,7 +19,76 @@
       <span>Message</span>
       <textarea name="content" rows="8" placeholder="Message text" required></textarea>
     </label>
+    <label>
+      <span>Attachments</span>
+      <input type="file" name="attachments" multiple data-attachment-input />
+      <small class="field-hint">The 5 MB limit applies to the combined size of all selected files in this message.</small>
+      <small class="field-hint" data-attachment-summary>No files selected.</small>
+    </label>
     <button type="submit">Send</button>
   </form>
 </section>
+<div class="limit-modal" data-limit-modal hidden>
+  <div class="limit-modal-backdrop" data-limit-close></div>
+  <div class="limit-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="limit-modal-title">
+    <h3 id="limit-modal-title">Attachment limit exceeded</h3>
+    <p>Maximum total limit of all files is {{ attachment_limit_bytes|filesize }}.</p>
+    <button type="button" class="secondary-button" data-limit-close>OK</button>
+  </div>
+</div>
+<script>
+  (() => {
+    const limitBytes = {{ attachment_limit_bytes }};
+    const form = document.querySelector(".form");
+    const input = document.querySelector("[data-attachment-input]");
+    const summary = document.querySelector("[data-attachment-summary]");
+    const modal = document.querySelector("[data-limit-modal]");
+    const closers = document.querySelectorAll("[data-limit-close]");
+    if (!form || !input || !summary || !modal) return;
+
+    const humanSize = (bytes) => {
+      if (bytes < 1024) return `${bytes} B`;
+      const kb = bytes / 1024;
+      if (kb < 1024) return `${kb.toFixed(2)} KB`;
+      return `${(kb / 1024).toFixed(2)} MB`;
+    };
+
+    const selectedBytes = () => Array.from(input.files || []).reduce((sum, file) => sum + file.size, 0);
+
+    const updateSummary = () => {
+      const files = Array.from(input.files || []);
+      if (!files.length) {
+        summary.textContent = "No files selected.";
+        return;
+      }
+
+      const total = selectedBytes();
+      const names = files.map((file) => file.name).join(", ");
+      summary.textContent = `${files.length} file(s), ${humanSize(total)} total: ${names}`;
+    };
+
+    const openModal = () => {
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+    };
+
+    const closeModal = () => {
+      modal.hidden = true;
+      document.body.classList.remove("modal-open");
+    };
+
+    input.addEventListener("change", updateSummary);
+    form.addEventListener("submit", (event) => {
+      if (selectedBytes() > limitBytes) {
+        event.preventDefault();
+        openModal();
+      }
+    });
+
+    closers.forEach((closer) => closer.addEventListener("click", closeModal));
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.hidden) closeModal();
+    });
+  })();
+</script>
 {% endblock %}

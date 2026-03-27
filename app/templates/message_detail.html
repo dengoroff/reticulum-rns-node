@@ -89,10 +89,38 @@
       <dd>{{ message.title or "-" }}</dd>
     </div>
     <div>
+      <dt>Attachments</dt>
+      <dd>
+        {% if message.attachment_count %}
+          {{ message.attachment_count }} file{% if message.attachment_count != 1 %}s{% endif %} / {{ message.attachment_bytes|filesize }}
+        {% else %}
+          -
+        {% endif %}
+      </dd>
+    </div>
+    <div>
       <dt>Last error</dt>
       <dd>{{ message.last_error or "-" }}</dd>
     </div>
   </dl>
+  {% if message.attachments %}
+  <div class="message-body">
+    <h3>Embedded Attachments</h3>
+    <ul class="attachment-list">
+      {% for attachment in message.attachments %}
+      <li>
+        <div class="attachment-row">
+          <div>
+            <strong>{{ attachment.filename }}</strong>
+            <span class="meta-line">{{ attachment.content_type or "application/octet-stream" }} · {{ attachment.size|filesize }}</span>
+          </div>
+          <a class="action-link" href="/messages/{{ message.id }}/attachments/{{ loop.index0 }}">Download</a>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
   <div class="message-body">
     <h3>Content</h3>
     <pre>{{ message.content }}</pre>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import threading
 import time
@@ -15,6 +16,7 @@ from app import repository
 
 class LXMFService:
     RETRY_DELAYS = (10, 30, 60, 300, 900)
+    ATTACHMENT_FIELD_KEY = "attachments"
 
     def __init__(self) -> None:
         self.data_path = Path(os.environ.get("APP_DATA_DIR", "/data/app"))
@@ -117,6 +119,7 @@ class LXMFService:
 
     def _on_delivery(self, message: LXMF.LXMessage) -> None:
         content = self._as_string(message.content_as_string)
+        attachments = self._extract_attachments(message)
         self._log(
             "Inbound LXMF received "
             f"from={self._pretty_hex(message.source_hash)} "
@@ -136,11 +139,20 @@ class LXMFService:
                 "ratchet_id": self._pretty_hex(getattr(message, "ratchet_id", None)),
                 "stamp_valid": getattr(message, "stamp_valid", None),
                 "signature_validated": getattr(message, "signature_validated", None),
+                "attachments": attachments,
+                "attachment_count": len(attachments),
+                "attachment_bytes": self._attachment_bytes(attachments),
                 "created_at": getattr(message, "timestamp", time.time()),
             }
         )
 
-    def send_message(self, destination_hex: str, content: str, title: str | None = None) -> int:
+    def send_message(
+        self,
+        destination_hex: str,
+        content: str,
+        title: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> int:
         if not self.router or not self.destination:
             raise RuntimeError("LXMF service is not started")
 
@@ -158,13 +170,16 @@ class LXMFService:
                 "destination_hash": normalized_destination,
                 "title": title,
                 "content": content,
+                "attachments": attachments or [],
+                "attachment_count": len(attachments or []),
+                "attachment_bytes": self._attachment_bytes(attachments or []),
                 "next_retry_at": time.time(),
                 "created_at": time.time(),
             }
         )
         self._log(
             f"Outbound request queued id={record_id} destination={normalized_destination} "
-            f"title={title!r} bytes={len(content.encode('utf-8'))}"
+            f"title={title!r} bytes={len(content.encode('utf-8'))} attachments={len(attachments or [])}"
         )
         return record_id
 
@@ -209,7 +224,13 @@ class LXMFService:
         except Exception:
             return ""
 
-    def _deliver_to_self(self, record_id: int, content: str, title: str | None) -> int:
+    def _deliver_to_self(
+        self,
+        record_id: int,
+        content: str,
+        title: str | None,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> int:
         if not self.destination:
             raise RuntimeError("LXMF destination is not ready")
 
@@ -220,6 +241,8 @@ class LXMFService:
             title,
             desired_method=LXMF.LXMessage.DIRECT,
         )
+        if attachments:
+            message.set_fields({self.ATTACHMENT_FIELD_KEY: attachments})
         message.pack()
         repository.insert_message(
             {
@@ -233,6 +256,9 @@ class LXMFService:
                 "transport_encryption": "local",
                 "signature_validated": True,
                 "stamp_valid": True,
+                "attachments": attachments or [],
+                "attachment_count": len(attachments or []),
+                "attachment_bytes": self._attachment_bytes(attachments or []),
                 "created_at": time.time(),
             }
         )
@@ -354,6 +380,7 @@ class LXMFService:
         destination_hex = (item.get("destination_hash") or "").strip().lower()
         content = item.get("content") or ""
         title = item.get("title")
+        attachments = item.get("attachments") or []
         try:
             destination_hash = bytes.fromhex(destination_hex)
         except ValueError:
@@ -362,7 +389,7 @@ class LXMFService:
 
         if destination_hash == self.destination.hash:
             self._log(f"Outbound id={item['id']} resolved as self-send in worker")
-            self._deliver_to_self(item["id"], content, title)
+            self._deliver_to_self(item["id"], content, title, attachments=attachments)
             return
 
         has_path = RNS.Transport.has_path(destination_hash)
@@ -399,6 +426,8 @@ class LXMFService:
             desired_method=LXMF.LXMessage.DIRECT,
             include_ticket=True,
         )
+        if attachments:
+            message.set_fields({self.ATTACHMENT_FIELD_KEY: attachments})
         message.register_delivery_callback(lambda msg: self._on_outbound_state(item["id"], msg))
         message.register_failed_callback(lambda msg: self._on_outbound_failure(item["id"], msg))
         try:
@@ -420,6 +449,46 @@ class LXMFService:
         except Exception as exc:
             self._schedule_retry(item["id"], str(exc))
             self._log(f"Outbound id={item['id']} router handling raised an exception: {exc}", level=RNS.LOG_ERROR)
+
+    def _extract_attachments(self, message: LXMF.LXMessage) -> list[dict[str, Any]]:
+        fields = None
+        getter = getattr(message, "get_fields", None)
+        if callable(getter):
+            fields = getter()
+        elif hasattr(message, "fields"):
+            fields = getattr(message, "fields", None)
+        if not isinstance(fields, dict):
+            return []
+        attachments = fields.get(self.ATTACHMENT_FIELD_KEY)
+        if not isinstance(attachments, list):
+            return []
+
+        normalized = []
+        for item in attachments:
+            if not isinstance(item, dict):
+                continue
+            normalized.append(
+                {
+                    "filename": str(item.get("filename") or "attachment"),
+                    "content_type": str(item.get("content_type") or "application/octet-stream"),
+                    "size": int(item.get("size") or self._decoded_attachment_size(item.get("data_b64"))),
+                    "data_b64": str(item.get("data_b64") or ""),
+                }
+            )
+        return normalized
+
+    @staticmethod
+    def _decoded_attachment_size(value: Any) -> int:
+        if not value:
+            return 0
+        try:
+            return len(base64.b64decode(value))
+        except Exception:
+            return 0
+
+    @staticmethod
+    def _attachment_bytes(attachments: list[dict[str, Any]]) -> int:
+        return sum(int(item.get("size", 0) or 0) for item in attachments)
 
     def _schedule_retry(self, message_id: int, error: str, **extra_updates: Any) -> None:
         message = repository.get_message(message_id)

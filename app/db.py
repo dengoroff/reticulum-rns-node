@@ -30,6 +30,9 @@ def init_db() -> None:
                 next_retry_at REAL,
                 last_attempt_at REAL,
                 last_error TEXT,
+                attachments_json TEXT,
+                attachment_count INTEGER NOT NULL DEFAULT 0,
+                attachment_bytes INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
@@ -39,6 +42,9 @@ def init_db() -> None:
         _ensure_column(conn, "messages", "next_retry_at", "REAL")
         _ensure_column(conn, "messages", "last_attempt_at", "REAL")
         _ensure_column(conn, "messages", "last_error", "TEXT")
+        _ensure_column(conn, "messages", "attachments_json", "TEXT")
+        _ensure_column(conn, "messages", "attachment_count", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "messages", "attachment_bytes", "INTEGER NOT NULL DEFAULT 0")
         conn.commit()
 
 

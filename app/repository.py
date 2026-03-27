@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
@@ -24,6 +25,9 @@ def insert_message(data: dict[str, Any]) -> int:
         "next_retry_at": data.get("next_retry_at"),
         "last_attempt_at": data.get("last_attempt_at"),
         "last_error": data.get("last_error"),
+        "attachments_json": json.dumps(data.get("attachments", [])),
+        "attachment_count": data.get("attachment_count", len(data.get("attachments", []))),
+        "attachment_bytes": data.get("attachment_bytes", _attachment_bytes(data.get("attachments", []))),
         "created_at": data.get("created_at", now),
         "updated_at": now,
     }
@@ -33,11 +37,15 @@ def insert_message(data: dict[str, Any]) -> int:
             INSERT INTO messages (
                 direction, state, source_hash, destination_hash, title, content, lxmf_hash,
                 transport_encryption, ratchet_id, stamp_valid, signature_validated,
-                retry_count, next_retry_at, last_attempt_at, last_error, created_at, updated_at
+                retry_count, next_retry_at, last_attempt_at, last_error,
+                attachments_json, attachment_count, attachment_bytes,
+                created_at, updated_at
             ) VALUES (
                 :direction, :state, :source_hash, :destination_hash, :title, :content, :lxmf_hash,
                 :transport_encryption, :ratchet_id, :stamp_valid, :signature_validated,
-                :retry_count, :next_retry_at, :last_attempt_at, :last_error, :created_at, :updated_at
+                :retry_count, :next_retry_at, :last_attempt_at, :last_error,
+                :attachments_json, :attachment_count, :attachment_bytes,
+                :created_at, :updated_at
             )
             """,
             payload,
@@ -67,7 +75,7 @@ def list_messages(direction: str, limit: int = 10, offset: int = 0) -> list[dict
             """,
             (direction, limit, offset),
         ).fetchall()
-    return [dict(row) for row in rows]
+    return [_decode_message(row) for row in rows]
 
 
 def count_messages(direction: str) -> int:
@@ -92,7 +100,7 @@ def get_message(message_id: int) -> dict[str, Any] | None:
             """,
             (message_id,),
         ).fetchone()
-    return dict(row) if row else None
+    return _decode_message(row) if row else None
 
 
 def delete_message(message_id: int) -> None:
@@ -132,7 +140,7 @@ def pop_next_outbound_message() -> dict[str, Any] | None:
         if claimed.rowcount == 0:
             return None
         fresh = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
-    return dict(fresh) if fresh else None
+    return _decode_message(fresh) if fresh else None
 
 
 def list_retryable_messages(limit: int = 100) -> list[dict[str, Any]]:
@@ -148,3 +156,19 @@ def list_retryable_messages(limit: int = 100) -> list[dict[str, Any]]:
             (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def _decode_message(row) -> dict[str, Any]:
+    payload = dict(row)
+    attachments_raw = payload.get("attachments_json")
+    try:
+        payload["attachments"] = json.loads(attachments_raw) if attachments_raw else []
+    except json.JSONDecodeError:
+        payload["attachments"] = []
+    return payload
+
+
+def _attachment_bytes(attachments: list[dict[str, Any]] | None) -> int:
+    if not attachments:
+        return 0
+    return sum(int(item.get("size", 0) or 0) for item in attachments)

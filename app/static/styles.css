@@ -346,6 +346,10 @@ td {
   gap: 8px;
 }
 
+.field-hint {
+  color: var(--muted);
+}
+
 input,
 textarea,
 button {
@@ -434,6 +438,51 @@ button {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+.attachment-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.attachment-list li + li {
+  margin-top: 10px;
+}
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.limit-modal[hidden] {
+  display: none;
+}
+
+.limit-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+
+.limit-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop);
+}
+
+.limit-modal-dialog {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+  margin: 14vh auto;
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 24px 80px var(--shadow-strong);
 }
 
 .diag-section + .diag-section {

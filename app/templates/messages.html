@@ -19,6 +19,7 @@
           {% endif %}
           <th>Updated</th>
           <th>Title</th>
+          <th>Files</th>
           <th>Content</th>
           <th>Actions</th>
         </tr>
@@ -36,6 +37,13 @@
           {% endif %}
           <td>{{ message.updated_at|datetime_ts }}</td>
           <td>{{ message.title or "-" }}</td>
+          <td>
+            {% if message.attachment_count %}
+              {{ message.attachment_count }} file{% if message.attachment_count != 1 %}s{% endif %} / {{ message.attachment_bytes|filesize }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
           <td>
             {% if message.content|length > 30 %}
               {{ message.content[:30] }}...
