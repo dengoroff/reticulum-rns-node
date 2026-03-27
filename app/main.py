@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+from urllib.parse import quote
 from datetime import datetime
 from contextlib import asynccontextmanager
 from io import BytesIO
@@ -105,7 +106,8 @@ async def download_attachment(message_id: int, attachment_index: int):
 
     filename = attachment.get("filename") or f"attachment-{attachment_index + 1}"
     content_type = attachment.get("content_type") or "application/octet-stream"
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    safe_ascii = "".join(char if 32 <= ord(char) < 127 and char not in {'"', "\\"} else "_" for char in filename)
+    headers = {"Content-Disposition": f"attachment; filename=\"{safe_ascii}\"; filename*=UTF-8''{quote(filename)}"}
     return Response(content=payload, media_type=content_type, headers=headers)
 
 
