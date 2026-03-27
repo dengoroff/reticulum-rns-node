@@ -26,7 +26,13 @@
           <td>{{ message.source_hash or "-" }}</td>
           <td>{{ message.destination_hash or "-" }}</td>
           <td>{{ message.title or "-" }}</td>
-          <td>{{ message.content }}</td>
+          <td>
+            {% if message.content|length > 30 %}
+              {{ message.content[:30] }}...
+            {% else %}
+              {{ message.content }}
+            {% endif %}
+          </td>
           <td><a class="action-link" href="/messages/{{ message.id }}">View</a></td>
         </tr>
         {% endfor %}
