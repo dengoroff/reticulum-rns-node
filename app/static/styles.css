@@ -457,6 +457,15 @@ button {
   flex-wrap: wrap;
 }
 
+.attachment-picker-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.attachment-picker-list li + li {
+  margin-top: 6px;
+}
+
 .limit-modal[hidden] {
   display: none;
 }

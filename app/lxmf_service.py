@@ -459,6 +459,7 @@ class LXMFService:
             fields = getattr(message, "fields", None)
         if not isinstance(fields, dict):
             return []
+        fields = self._normalise_msgpack_value(fields)
         attachments = fields.get(self.ATTACHMENT_FIELD_KEY)
         if not isinstance(attachments, list):
             return []
@@ -476,6 +477,19 @@ class LXMFService:
                 }
             )
         return normalized
+
+    @classmethod
+    def _normalise_msgpack_value(cls, value: Any) -> Any:
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except Exception:
+                return value
+        if isinstance(value, list):
+            return [cls._normalise_msgpack_value(item) for item in value]
+        if isinstance(value, dict):
+            return {cls._normalise_msgpack_value(key): cls._normalise_msgpack_value(item) for key, item in value.items()}
+        return value
 
     @staticmethod
     def _decoded_attachment_size(value: Any) -> int:
