@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Dashboard</h2>
+  <dl class="stats">
+    <div>
+      <dt>LXMF address</dt>
+      <dd>{{ stats.address }}</dd>
+    </div>
+    <div>
+      <dt>Display name</dt>
+      <dd>{{ stats.display_name }}</dd>
+    </div>
+    <div>
+      <dt>Uptime</dt>
+      <dd>{{ stats.uptime_seconds }} sec</dd>
+    </div>
+    <div>
+      <dt>Known paths</dt>
+      <dd>{{ stats.known_paths if stats.known_paths is not none else "n/a" }}</dd>
+    </div>
+    <div>
+      <dt>Announces cached</dt>
+      <dd>{{ stats.announces if stats.announces is not none else "n/a" }}</dd>
+    </div>
+    <div>
+      <dt>Configured peers</dt>
+      <dd>{{ stats.configured_peers|length }}</dd>
+    </div>
+  </dl>
+</section>
+<section class="panel peer-panel">
+  <h2>Bootstrap Peers</h2>
+  <ul class="peer-list">
+    {% for peer in stats.configured_peers %}
+    <li>{{ peer }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

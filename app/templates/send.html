@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Send Message</h2>
+  {% if error %}
+  <div class="notice error">{{ error }}</div>
+  {% endif %}
+  <form method="post" class="form">
+    <label>
+      <span>Destination address</span>
+      <input type="text" name="destination" placeholder="16-byte LXMF destination hash" required />
+    </label>
+    <label>
+      <span>Title</span>
+      <input type="text" name="title" placeholder="Optional title" />
+    </label>
+    <label>
+      <span>Message</span>
+      <textarea name="content" rows="8" placeholder="Message text" required></textarea>
+    </label>
+    <button type="submit">Send</button>
+  </form>
+</section>
+{% endblock %}

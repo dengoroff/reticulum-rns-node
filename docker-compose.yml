@@ -1,0 +1,28 @@
+services:
+  reticulum-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reticulum-node
+    restart: unless-stopped
+    environment:
+      WEB_PORT: ${WEB_PORT:-8080}
+      RNS_SERVER_PORT: ${RNS_SERVER_PORT:-4242}
+      RNS_ENABLE_SERVER: ${RNS_ENABLE_SERVER:-true}
+      RNS_ENABLE_DISCOVERY: ${RNS_ENABLE_DISCOVERY:-true}
+      RNS_PEERS: ${RNS_PEERS:-amsterdam.connect.reticulum.network:4965,reticulum.betweentheborders.com:4242,rns.quad4.io:4242}
+      LXMF_DISPLAY_NAME: ${LXMF_DISPLAY_NAME:-Web Node}
+      LXMF_ANNOUNCE_INTERVAL: ${LXMF_ANNOUNCE_INTERVAL:-3600}
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
+      - "${RNS_SERVER_PORT:-4242}:${RNS_SERVER_PORT:-4242}"
+    volumes:
+      - reticulum-rns:/data/rns
+      - reticulum-lxmd:/data/lxmd
+      - reticulum-app:/data/app
+
+volumes:
+  reticulum-rns:
+  reticulum-lxmd:
+  reticulum-app:
