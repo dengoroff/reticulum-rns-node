@@ -242,6 +242,33 @@ button {
   margin-top: 20px;
 }
 
+.diag-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.diag-collapse {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.diag-collapse summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 16px;
+  font-weight: 600;
+}
+
+.diag-collapse summary::-webkit-details-marker {
+  display: none;
+}
+
 .diag-pre {
   margin: 8px 0 0;
   padding: 16px;
@@ -252,6 +279,13 @@ button {
   overflow-wrap: anywhere;
   overflow-x: auto;
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+.diag-collapse .diag-pre {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
 }
 
 @media (max-width: 800px) {

@@ -9,10 +9,13 @@ from typing import Any
 import LXMF
 import RNS
 
+from app.peer_health import load_candidate_peers, refresh_peer_health
 from app import repository
 
 
 class LXMFService:
+    RETRY_DELAYS = (10, 30, 60, 300, 900)
+
     def __init__(self) -> None:
         self.data_path = Path(os.environ.get("APP_DATA_DIR", "/data/app"))
         self.data_path.mkdir(parents=True, exist_ok=True)
@@ -26,6 +29,8 @@ class LXMFService:
         self.lock = threading.Lock()
         self.announce_thread: threading.Thread | None = None
         self.startup_announce_thread: threading.Thread | None = None
+        self.peer_monitor_thread: threading.Thread | None = None
+        self.outbound_worker_thread: threading.Thread | None = None
 
     def start(self) -> None:
         with self.lock:
@@ -53,6 +58,10 @@ class LXMFService:
             self.announce_thread.start()
             self.startup_announce_thread = threading.Thread(target=self._startup_announce_loop, daemon=True)
             self.startup_announce_thread.start()
+            self.peer_monitor_thread = threading.Thread(target=self._peer_monitor_loop, daemon=True)
+            self.peer_monitor_thread.start()
+            self.outbound_worker_thread = threading.Thread(target=self._outbound_worker_loop, daemon=True)
+            self.outbound_worker_thread.start()
 
     def _load_or_create_identity(self) -> RNS.Identity:
         identity_path = self.data_path / "web-ui.identity"
@@ -83,6 +92,28 @@ class LXMFService:
                     self._emit_announce(f"startup-delay {delay}s")
             except Exception:
                 self._log(f"Failed delayed announce after {delay}s", level=RNS.LOG_ERROR)
+
+    def _peer_monitor_loop(self) -> None:
+        while True:
+            try:
+                health = refresh_peer_health(load_candidate_peers(os.environ.get("RNS_PEERS")), timeout=3.0)
+                healthy = sum(1 for item in health if item["tcp_ok"])
+                self._log(f"Peer health monitor updated: {healthy}/{len(health)} peers reachable")
+            except Exception as exc:
+                self._log(f"Peer health monitor failed: {exc}", level=RNS.LOG_ERROR)
+            time.sleep(300)
+
+    def _outbound_worker_loop(self) -> None:
+        while True:
+            try:
+                item = repository.pop_next_outbound_message()
+                if item is None:
+                    time.sleep(2)
+                    continue
+                self._process_outbound_message(item)
+            except Exception as exc:
+                self._log(f"Outbound worker crashed on iteration: {exc}", level=RNS.LOG_ERROR)
+                time.sleep(2)
 
     def _on_delivery(self, message: LXMF.LXMessage) -> None:
         content = self._as_string(message.content_as_string)
@@ -115,89 +146,26 @@ class LXMFService:
 
         normalized_destination = destination_hex.strip().lower()
         try:
-            destination_hash = bytes.fromhex(normalized_destination)
+            bytes.fromhex(normalized_destination)
         except ValueError as exc:
             raise ValueError("Destination address must be a valid hex string.") from exc
 
         record_id = repository.insert_message(
             {
                 "direction": "outbox",
-                "state": "queued",
+                "state": "outbound",
                 "source_hash": self.address,
                 "destination_hash": normalized_destination,
                 "title": title,
                 "content": content,
+                "next_retry_at": time.time(),
                 "created_at": time.time(),
             }
         )
         self._log(
-            f"Outbound request accepted id={record_id} destination={normalized_destination} "
+            f"Outbound request queued id={record_id} destination={normalized_destination} "
             f"title={title!r} bytes={len(content.encode('utf-8'))}"
         )
-
-        if destination_hash == self.destination.hash:
-            self._log(f"Outbound id={record_id} resolved as self-send")
-            return self._deliver_to_self(record_id, content, title)
-
-        has_path = RNS.Transport.has_path(destination_hash)
-        self._log(f"Outbound id={record_id} initial path known={has_path}")
-        if not has_path:
-            self._log(f"Outbound id={record_id} requesting path to {normalized_destination}")
-            RNS.Transport.request_path(destination_hash)
-            deadline = time.time() + 20
-            while time.time() < deadline and not RNS.Transport.has_path(destination_hash):
-                time.sleep(0.25)
-            has_path = RNS.Transport.has_path(destination_hash)
-            self._log(f"Outbound id={record_id} path request complete known={has_path}")
-
-        recipient_identity = RNS.Identity.recall(destination_hash)
-        if recipient_identity is None:
-            repository.update_message(record_id, state="failed")
-            self._log(
-                f"Outbound id={record_id} failed because destination identity {normalized_destination} "
-                "is still unknown after path handling",
-                level=RNS.LOG_ERROR,
-            )
-            raise ValueError("Destination identity is unknown. Wait for an announce and try again.")
-        self._log(f"Outbound id={record_id} destination identity recalled successfully")
-
-        dest = RNS.Destination(
-            recipient_identity,
-            RNS.Destination.OUT,
-            RNS.Destination.SINGLE,
-            "lxmf",
-            "delivery",
-        )
-        message = LXMF.LXMessage(
-            dest,
-            self.destination,
-            content,
-            title,
-            desired_method=LXMF.LXMessage.DIRECT,
-            include_ticket=True,
-        )
-        message.register_delivery_callback(lambda msg: self._on_outbound_state(record_id, msg))
-        message.register_failed_callback(lambda msg: self._on_outbound_failure(record_id, msg))
-        try:
-            self._log(
-                f"Outbound id={record_id} handing message to LXMF router with desired method DIRECT"
-            )
-            self.router.handle_outbound(message)
-            repository.update_message(
-                record_id,
-                state=self._state_name(message.state),
-                lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
-                transport_encryption=str(getattr(message, "transport_encryption", "")),
-                ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
-            )
-            self._log(
-                f"Outbound id={record_id} queued in LXMF state={self._state_name(message.state)} "
-                f"hash={self._pretty_hex(getattr(message, 'hash', None))}"
-            )
-        except Exception:
-            repository.update_message(record_id, state="failed")
-            self._log(f"Outbound id={record_id} router handling raised an exception", level=RNS.LOG_ERROR)
-            raise
         return record_id
 
     @property
@@ -273,6 +241,8 @@ class LXMFService:
             state="delivered",
             lxmf_hash=self._pretty_hex(message.hash),
             transport_encryption="local",
+            next_retry_at=None,
+            last_error=None,
         )
         self._log(
             f"Outbound id={record_id} delivered locally to self hash={self._pretty_hex(message.hash)}"
@@ -287,6 +257,8 @@ class LXMFService:
             lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
             transport_encryption=str(getattr(message, "transport_encryption", "")),
             ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
+            next_retry_at=None,
+            last_error=None,
         )
         self._log(
             f"Outbound id={record_id} delivery callback state={state_name} "
@@ -294,16 +266,15 @@ class LXMFService:
         )
 
     def _on_outbound_failure(self, record_id: int, message: LXMF.LXMessage) -> None:
-        state_name = self._state_name(getattr(message, "state", LXMF.LXMessage.FAILED))
-        repository.update_message(
+        self._schedule_retry(
             record_id,
-            state=state_name,
+            f"Delivery callback failure for {self._pretty_hex(getattr(message, 'hash', None)) or 'unknown message'}",
             lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
             transport_encryption=str(getattr(message, "transport_encryption", "")),
             ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
         )
         self._log(
-            f"Outbound id={record_id} failure callback state={state_name} "
+            f"Outbound id={record_id} failure callback state={self._state_name(getattr(message, 'state', LXMF.LXMessage.FAILED))} "
             f"hash={self._pretty_hex(getattr(message, 'hash', None))}",
             level=RNS.LOG_ERROR,
         )
@@ -351,6 +322,125 @@ class LXMFService:
                 continue
             peers.append(line)
         return peers
+
+    def retry_message(self, message_id: int) -> None:
+        message = repository.get_message(message_id)
+        if not message or message["direction"] != "outbox":
+            raise ValueError("Message not found")
+        repository.update_message(
+            message_id,
+            state="outbound",
+            next_retry_at=time.time(),
+            last_error=None,
+        )
+        self._log(f"Outbound id={message_id} scheduled for immediate retry")
+
+    def cancel_message(self, message_id: int) -> None:
+        message = repository.get_message(message_id)
+        if not message or message["direction"] != "outbox":
+            raise ValueError("Message not found")
+        repository.update_message(
+            message_id,
+            state="cancelled",
+            next_retry_at=None,
+        )
+        self._log(f"Outbound id={message_id} cancelled by user")
+
+    def _process_outbound_message(self, item: dict[str, Any]) -> None:
+        if not self.router or not self.destination:
+            self._schedule_retry(item["id"], "LXMF service is not started")
+            return
+
+        destination_hex = (item.get("destination_hash") or "").strip().lower()
+        content = item.get("content") or ""
+        title = item.get("title")
+        try:
+            destination_hash = bytes.fromhex(destination_hex)
+        except ValueError:
+            repository.update_message(item["id"], state="failed", next_retry_at=None, last_error="Invalid destination hex")
+            return
+
+        if destination_hash == self.destination.hash:
+            self._log(f"Outbound id={item['id']} resolved as self-send in worker")
+            self._deliver_to_self(item["id"], content, title)
+            return
+
+        has_path = RNS.Transport.has_path(destination_hash)
+        self._log(f"Outbound id={item['id']} worker initial path known={has_path}")
+        if not has_path:
+            self._log(f"Outbound id={item['id']} requesting path to {destination_hex}")
+            RNS.Transport.request_path(destination_hash)
+            deadline = time.time() + 20
+            while time.time() < deadline and not RNS.Transport.has_path(destination_hash):
+                time.sleep(0.25)
+            has_path = RNS.Transport.has_path(destination_hash)
+            self._log(f"Outbound id={item['id']} path request complete known={has_path}")
+
+        recipient_identity = RNS.Identity.recall(destination_hash)
+        if recipient_identity is None:
+            self._schedule_retry(
+                item["id"],
+                f"Destination identity {destination_hex} is unknown after path lookup",
+            )
+            return
+
+        dest = RNS.Destination(
+            recipient_identity,
+            RNS.Destination.OUT,
+            RNS.Destination.SINGLE,
+            "lxmf",
+            "delivery",
+        )
+        message = LXMF.LXMessage(
+            dest,
+            self.destination,
+            content,
+            title,
+            desired_method=LXMF.LXMessage.DIRECT,
+            include_ticket=True,
+        )
+        message.register_delivery_callback(lambda msg: self._on_outbound_state(item["id"], msg))
+        message.register_failed_callback(lambda msg: self._on_outbound_failure(item["id"], msg))
+        try:
+            self._log(f"Outbound id={item['id']} handing message to LXMF router with desired method DIRECT")
+            self.router.handle_outbound(message)
+            repository.update_message(
+                item["id"],
+                state=self._state_name(message.state),
+                lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
+                transport_encryption=str(getattr(message, "transport_encryption", "")),
+                ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
+                next_retry_at=None,
+                last_error=None,
+            )
+            self._log(
+                f"Outbound id={item['id']} queued in LXMF state={self._state_name(message.state)} "
+                f"hash={self._pretty_hex(getattr(message, 'hash', None))}"
+            )
+        except Exception as exc:
+            self._schedule_retry(item["id"], str(exc))
+            self._log(f"Outbound id={item['id']} router handling raised an exception: {exc}", level=RNS.LOG_ERROR)
+
+    def _schedule_retry(self, message_id: int, error: str, **extra_updates: Any) -> None:
+        message = repository.get_message(message_id)
+        if not message:
+            return
+        retry_count = int(message.get("retry_count") or 0) + 1
+        delay = self.RETRY_DELAYS[min(retry_count - 1, len(self.RETRY_DELAYS) - 1)]
+        state = "failed" if retry_count >= len(self.RETRY_DELAYS) else "retry_wait"
+        updates = {
+            "state": state,
+            "retry_count": retry_count,
+            "next_retry_at": None if state == "failed" else time.time() + delay,
+            "last_error": error,
+        }
+        updates.update(extra_updates)
+        repository.update_message(message_id, **updates)
+        self._log(
+            f"Outbound id={message_id} scheduled retry_count={retry_count} state={state} "
+            f"next_delay={delay if state != 'failed' else 'none'} error={error}",
+            level=RNS.LOG_ERROR if state == "failed" else RNS.LOG_NOTICE,
+        )
 
 
 service = LXMFService()

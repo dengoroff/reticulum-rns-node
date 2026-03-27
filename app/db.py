@@ -26,12 +26,27 @@ def init_db() -> None:
                 ratchet_id TEXT,
                 stamp_valid INTEGER,
                 signature_validated INTEGER,
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                next_retry_at REAL,
+                last_attempt_at REAL,
+                last_error TEXT,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
             """
         )
+        _ensure_column(conn, "messages", "retry_count", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "messages", "next_retry_at", "REAL")
+        _ensure_column(conn, "messages", "last_attempt_at", "REAL")
+        _ensure_column(conn, "messages", "last_error", "TEXT")
         conn.commit()
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    columns = {row[1] for row in rows}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 @contextmanager

@@ -1,24 +1,41 @@
 from __future__ import annotations
 
+import json
 import os
-import socket
 import subprocess
+import time
 from pathlib import Path
 
+from app.peer_health import (
+    APP_DATA_DIR,
+    HEALTH_CACHE_PATH,
+    format_dns_report,
+    format_tcp_report,
+    load_candidate_peers,
+    refresh_peer_health,
+)
 
 RNS_CONFIG_DIR = os.environ.get("RNS_CONFIG_DIR", "/data/rns")
 RNS_CONFIG_FILE = Path(RNS_CONFIG_DIR) / "config"
+RNPATH_CACHE_PATH = APP_DATA_DIR / "rnpath_cache.json"
+RNPATH_CACHE_TTL = 120
 
 
-def collect_diagnostics() -> dict[str, str]:
-    peers = _parse_bootstrap_peers(RNS_CONFIG_FILE)
+def collect_diagnostics() -> dict[str, object]:
+    health = refresh_peer_health(load_candidate_peers(os.environ.get("RNS_PEERS")))
+    rnpath_cache = _get_rnpath_cache()
     return {
         "config_path": str(RNS_CONFIG_FILE),
         "config": _read_file(RNS_CONFIG_FILE),
         "rnstatus": _run_command(["rnstatus", "--config", RNS_CONFIG_DIR]),
-        "rnpath": _run_command(["rnpath", "-t", "--config", RNS_CONFIG_DIR]),
-        "dns": _dns_report(peers),
-        "tcp": _tcp_report(peers),
+        "rnpath": rnpath_cache["output"],
+        "rnpath_cached_at": rnpath_cache["cached_at"],
+        "rnpath_age_seconds": rnpath_cache["age_seconds"],
+        "rnpath_cache_path": str(RNPATH_CACHE_PATH),
+        "dns": format_dns_report(health),
+        "tcp": format_tcp_report(health),
+        "peer_health": health,
+        "peer_health_cache_path": str(HEALTH_CACHE_PATH),
     }
 
 
@@ -60,60 +77,33 @@ def _run_command(command: list[str]) -> str:
     return f"Command exited with code {result.returncode} and no output"
 
 
-def _parse_bootstrap_peers(path: Path) -> list[tuple[str, int]]:
-    peers: list[tuple[str, int]] = []
-    if not path.exists():
-        return peers
+def _get_rnpath_cache() -> dict[str, object]:
+    cached = _load_rnpath_cache()
+    now = int(time.time())
 
-    current_host: str | None = None
-    current_port: int | None = None
+    if cached:
+        age = now - int(cached.get("cached_at", 0))
+        if age < RNPATH_CACHE_TTL:
+            cached["age_seconds"] = age
+            return cached
 
-    for raw_line in path.read_text().splitlines():
-        line = raw_line.strip()
-        if line.startswith("[[Bootstrap "):
-            if current_host and current_port:
-                peers.append((current_host, current_port))
-            current_host = None
-            current_port = None
-            continue
-        if line.startswith("target_host = "):
-            current_host = line.split("=", 1)[1].strip()
-            continue
-        if line.startswith("target_port = "):
-            try:
-                current_port = int(line.split("=", 1)[1].strip())
-            except ValueError:
-                current_port = None
-
-    if current_host and current_port:
-        peers.append((current_host, current_port))
-
-    return peers
+    output = _run_command(["rnpath", "-t", "--config", RNS_CONFIG_DIR])
+    payload = {
+        "output": output,
+        "cached_at": now,
+        "age_seconds": 0,
+    }
+    _save_rnpath_cache(payload)
+    return payload
 
 
-def _dns_report(peers: list[tuple[str, int]]) -> str:
-    if not peers:
-        return "No bootstrap peers found in rendered config."
-
-    lines = []
-    for host, _ in peers:
-        try:
-            addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)})
-            lines.append(f"{host}: {' , '.join(addresses)}")
-        except Exception as exc:
-            lines.append(f"{host}: FAIL {exc}")
-    return "\n".join(lines)
+def _load_rnpath_cache() -> dict[str, object] | None:
+    try:
+        return json.loads(RNPATH_CACHE_PATH.read_text())
+    except Exception:
+        return None
 
 
-def _tcp_report(peers: list[tuple[str, int]]) -> str:
-    if not peers:
-        return "No bootstrap peers found in rendered config."
-
-    lines = []
-    for host, port in peers:
-        try:
-            with socket.create_connection((host, port), timeout=5):
-                lines.append(f"{host}:{port} OK")
-        except Exception as exc:
-            lines.append(f"{host}:{port} FAIL {exc}")
-    return "\n".join(lines)
+def _save_rnpath_cache(payload: dict[str, object]) -> None:
+    RNPATH_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RNPATH_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))

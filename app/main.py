@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -16,6 +17,11 @@ from app.repository import get_message, list_messages
 
 BASE_DIR = os.path.dirname(__file__)
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+templates.env.filters["datetime_ts"] = lambda value: (
+    datetime.fromtimestamp(float(value)).strftime("%Y-%m-%d %H:%M:%S")
+    if value not in (None, "")
+    else "-"
+)
 
 
 @asynccontextmanager
@@ -70,6 +76,18 @@ async def message_details(request: Request, message_id: int):
     if message is None:
         raise HTTPException(status_code=404, detail="Message not found")
     return render(request, "message_detail.html", message=message, title="Message Details")
+
+
+@app.post("/messages/{message_id}/retry")
+async def retry_message(message_id: int):
+    service.retry_message(message_id)
+    return RedirectResponse(url=f"/messages/{message_id}", status_code=303)
+
+
+@app.post("/messages/{message_id}/cancel")
+async def cancel_message(message_id: int):
+    service.cancel_message(message_id)
+    return RedirectResponse(url=f"/messages/{message_id}", status_code=303)
 
 
 @app.post("/send", response_class=HTMLResponse)

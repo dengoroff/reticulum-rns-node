@@ -26,8 +26,18 @@
   </div>
 
   <div class="diag-section">
-    <h3>rnpath -t</h3>
-    <pre class="diag-pre">{{ diagnostics.rnpath }}</pre>
+    <div class="diag-head">
+      <h3>rnpath -t</h3>
+      <p class="meta-line">
+        cache: {{ diagnostics.rnpath_cache_path }}
+        | updated: {{ diagnostics.rnpath_cached_at }}
+        | age: {{ diagnostics.rnpath_age_seconds }}s
+      </p>
+    </div>
+    <details class="diag-collapse">
+      <summary>Show full path table</summary>
+      <pre class="diag-pre">{{ diagnostics.rnpath }}</pre>
+    </details>
   </div>
 
   <div class="diag-section">
@@ -38,6 +48,41 @@
   <div class="diag-section">
     <h3>Bootstrap TCP Connectivity</h3>
     <pre class="diag-pre">{{ diagnostics.tcp }}</pre>
+  </div>
+
+  <div class="diag-section">
+    <h3>Peer Health Table</h3>
+    <p class="meta-line">{{ diagnostics.peer_health_cache_path }}</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Peer</th>
+            <th>Selected</th>
+            <th>DNS</th>
+            <th>TCP</th>
+            <th>Addresses</th>
+            <th>Last Success</th>
+            <th>Failures</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for peer in diagnostics.peer_health %}
+          <tr>
+            <td>{{ peer.peer }}</td>
+            <td>{{ "yes" if peer.selected else "no" }}</td>
+            <td>{{ "ok" if peer.dns_ok else "fail" }}</td>
+            <td>{{ "ok" if peer.tcp_ok else "fail" }}</td>
+            <td>{{ peer.dns_addresses|join(", ") if peer.dns_addresses else "-" }}</td>
+            <td>{{ peer.last_success_at or "-" }}</td>
+            <td>{{ peer.consecutive_failures }}</td>
+            <td>{{ peer.error or "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 {% endblock %}

@@ -6,7 +6,19 @@
       <h2>Message #{{ message.id }}</h2>
       <p class="meta-line">{{ message.direction|capitalize }} message</p>
     </div>
-    <a class="action-link" href="/{{ message.direction }}">Back</a>
+    <div class="action-row">
+      {% if message.direction == "outbox" and message.state in ["retry_wait", "failed", "cancelled"] %}
+      <form method="post" action="/messages/{{ message.id }}/retry">
+        <button type="submit" class="secondary-button">Retry now</button>
+      </form>
+      {% endif %}
+      {% if message.direction == "outbox" and message.state in ["outbound", "sending", "retry_wait"] %}
+      <form method="post" action="/messages/{{ message.id }}/cancel">
+        <button type="submit" class="secondary-button">Cancel</button>
+      </form>
+      {% endif %}
+      <a class="action-link" href="/{{ message.direction }}">Back</a>
+    </div>
   </div>
   <dl class="detail-grid">
     <div>
@@ -19,11 +31,23 @@
     </div>
     <div>
       <dt>Created</dt>
-      <dd>{{ message.created_at }}</dd>
+      <dd>{{ message.created_at|datetime_ts }}</dd>
     </div>
     <div>
       <dt>Updated</dt>
-      <dd>{{ message.updated_at }}</dd>
+      <dd>{{ message.updated_at|datetime_ts }}</dd>
+    </div>
+    <div>
+      <dt>Retry count</dt>
+      <dd>{{ message.retry_count }}</dd>
+    </div>
+    <div>
+      <dt>Next retry</dt>
+      <dd>{{ message.next_retry_at|datetime_ts }}</dd>
+    </div>
+    <div>
+      <dt>Last attempt</dt>
+      <dd>{{ message.last_attempt_at|datetime_ts }}</dd>
     </div>
     <div>
       <dt>Source hash</dt>
@@ -56,6 +80,10 @@
     <div>
       <dt>Title</dt>
       <dd>{{ message.title or "-" }}</dd>
+    </div>
+    <div>
+      <dt>Last error</dt>
+      <dd>{{ message.last_error or "-" }}</dd>
     </div>
   </dl>
   <div class="message-body">

@@ -20,6 +20,10 @@ def insert_message(data: dict[str, Any]) -> int:
         "ratchet_id": data.get("ratchet_id"),
         "stamp_valid": int(bool(data.get("stamp_valid"))) if data.get("stamp_valid") is not None else None,
         "signature_validated": int(bool(data.get("signature_validated"))) if data.get("signature_validated") is not None else None,
+        "retry_count": data.get("retry_count", 0),
+        "next_retry_at": data.get("next_retry_at"),
+        "last_attempt_at": data.get("last_attempt_at"),
+        "last_error": data.get("last_error"),
         "created_at": data.get("created_at", now),
         "updated_at": now,
     }
@@ -28,10 +32,12 @@ def insert_message(data: dict[str, Any]) -> int:
             """
             INSERT INTO messages (
                 direction, state, source_hash, destination_hash, title, content, lxmf_hash,
-                transport_encryption, ratchet_id, stamp_valid, signature_validated, created_at, updated_at
+                transport_encryption, ratchet_id, stamp_valid, signature_validated,
+                retry_count, next_retry_at, last_attempt_at, last_error, created_at, updated_at
             ) VALUES (
                 :direction, :state, :source_hash, :destination_hash, :title, :content, :lxmf_hash,
-                :transport_encryption, :ratchet_id, :stamp_valid, :signature_validated, :created_at, :updated_at
+                :transport_encryption, :ratchet_id, :stamp_valid, :signature_validated,
+                :retry_count, :next_retry_at, :last_attempt_at, :last_error, :created_at, :updated_at
             )
             """,
             payload,
@@ -73,3 +79,53 @@ def get_message(message_id: int) -> dict[str, Any] | None:
             (message_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def pop_next_outbound_message() -> dict[str, Any] | None:
+    now = time.time()
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM messages
+            WHERE direction = 'outbox'
+              AND state IN ('outbound', 'retry_wait')
+              AND (next_retry_at IS NULL OR next_retry_at <= ?)
+            ORDER BY COALESCE(next_retry_at, created_at) ASC, id ASC
+            LIMIT 1
+            """,
+            (now,),
+        ).fetchone()
+        if row is None:
+            return None
+        message_id = row["id"]
+        updated_at = time.time()
+        claimed = conn.execute(
+            """
+            UPDATE messages
+            SET state = 'sending',
+                last_attempt_at = ?,
+                updated_at = ?
+            WHERE id = ?
+              AND state IN ('outbound', 'retry_wait')
+            """,
+            (updated_at, updated_at, message_id),
+        )
+        if claimed.rowcount == 0:
+            return None
+        fresh = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+    return dict(fresh) if fresh else None
+
+
+def list_retryable_messages(limit: int = 100) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM messages
+            WHERE direction = 'outbox'
+              AND state IN ('retry_wait', 'failed')
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]

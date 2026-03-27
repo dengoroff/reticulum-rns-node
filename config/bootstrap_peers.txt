@@ -10,3 +10,8 @@ reticulum.rocket-tech.net:443
 reticulum.tidudanka.com:37500
 202.61.243.41:4965
 45.77.109.86:4965
+reticulum.betweenthelayers.com:4242
+rns.bastet.io:4242
+rns.c3at.de:4242
+rns.voidnetwork.net:4242
+reticulum.teapot.cx:4242

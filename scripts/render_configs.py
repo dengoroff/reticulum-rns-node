@@ -2,15 +2,19 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from string import Template
 
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.peer_health import load_candidate_peers, select_active_peers
+
 CONFIG_DIR = ROOT / "config"
 RNS_CONFIG_DIR = Path(os.environ["RNS_CONFIG_DIR"])
 LXMD_CONFIG_DIR = Path(os.environ["LXMD_CONFIG_DIR"])
-BOOTSTRAP_PEERS_FILE = CONFIG_DIR / "bootstrap_peers.txt"
 
 
 def parse_bool(value: str | None, default: bool) -> bool:
@@ -19,37 +23,11 @@ def parse_bool(value: str | None, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def parse_peers(value: str) -> list[dict[str, str]]:
-    peers = []
-    for raw in value.split(","):
-        item = raw.strip()
-        if not item:
-            continue
-        host, _, port = item.partition(":")
-        peers.append({"host": host.strip(), "port": port.strip() or "4242"})
-    return peers
-
-
-def load_default_peers() -> list[dict[str, str]]:
-    if not BOOTSTRAP_PEERS_FILE.exists():
-        return []
-
-    items = []
-    for raw_line in BOOTSTRAP_PEERS_FILE.read_text().splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        host, _, port = line.partition(":")
-        if not host:
-            continue
-        items.append({"host": host.strip(), "port": port.strip() or "4242"})
-    return items
-
-
 def render_reticulum() -> str:
     template = (CONFIG_DIR / "reticulum.template.conf").read_text()
-    env_peers = os.environ.get("RNS_PEERS")
-    peers = parse_peers(env_peers) if env_peers else load_default_peers()
+    candidates = load_candidate_peers(os.environ.get("RNS_PEERS"))
+    max_active = int(os.environ.get("MAX_ACTIVE_PEERS", "3"))
+    peers, _ = select_active_peers(candidates, max_active=max_active)
     enable_server = parse_bool(os.environ.get("RNS_ENABLE_SERVER"), True)
     enable_discovery = parse_bool(os.environ.get("RNS_ENABLE_DISCOVERY"), True)
     lines = []
@@ -80,7 +58,7 @@ def render_reticulum() -> str:
                         lines.append(
                             buffered.replace("{{ loop.index }}", str(index))
                             .replace("{{ peer.host }}", peer["host"])
-                            .replace("{{ peer.port }}", peer["port"])
+                            .replace("{{ peer.port }}", str(peer["port"]))
                         )
             loop_items = None
             loop_buffer = []
