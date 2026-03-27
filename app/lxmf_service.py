@@ -61,6 +61,7 @@ class LXMFService:
                 RNS.log("Failed to announce LXMF destination", RNS.LOG_ERROR)
 
     def _on_delivery(self, message: LXMF.LXMessage) -> None:
+        content = self._as_string(message.content_as_string)
         repository.insert_message(
             {
                 "direction": "inbox",
@@ -68,7 +69,7 @@ class LXMFService:
                 "source_hash": self._pretty_hex(message.source_hash),
                 "destination_hash": self._pretty_hex(message.destination_hash),
                 "title": self._as_string(message.title_as_string),
-                "content": self._as_string(message.content_as_string),
+                "content": content,
                 "lxmf_hash": self._pretty_hex(getattr(message, "hash", None)),
                 "transport_encryption": str(getattr(message, "transport_encryption", "")),
                 "ratchet_id": self._pretty_hex(getattr(message, "ratchet_id", None)),
@@ -82,7 +83,27 @@ class LXMFService:
         if not self.router or not self.destination:
             raise RuntimeError("LXMF service is not started")
 
-        destination_hash = bytes.fromhex(destination_hex.strip())
+        normalized_destination = destination_hex.strip().lower()
+        try:
+            destination_hash = bytes.fromhex(normalized_destination)
+        except ValueError as exc:
+            raise ValueError("Destination address must be a valid hex string.") from exc
+
+        record_id = repository.insert_message(
+            {
+                "direction": "outbox",
+                "state": "queued",
+                "source_hash": self.address,
+                "destination_hash": normalized_destination,
+                "title": title,
+                "content": content,
+                "created_at": time.time(),
+            }
+        )
+
+        if destination_hash == self.destination.hash:
+            return self._deliver_to_self(record_id, content, title)
+
         if not RNS.Transport.has_path(destination_hash):
             RNS.Transport.request_path(destination_hash)
             deadline = time.time() + 20
@@ -108,24 +129,16 @@ class LXMFService:
             desired_method=LXMF.LXMessage.DIRECT,
             include_ticket=True,
         )
-        record_id = repository.insert_message(
-            {
-                "direction": "outbox",
-                "state": "queued",
-                "source_hash": self.address,
-                "destination_hash": destination_hex.lower(),
-                "title": title,
-                "content": content,
-                "created_at": time.time(),
-            }
-        )
+        message.register_delivery_callback(lambda msg: self._on_outbound_state(record_id, msg))
+        message.register_failed_callback(lambda msg: self._on_outbound_failure(record_id, msg))
         try:
             self.router.handle_outbound(message)
             repository.update_message(
                 record_id,
-                state="dispatched",
+                state=self._state_name(message.state),
                 lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
                 transport_encryption=str(getattr(message, "transport_encryption", "")),
+                ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
             )
         except Exception:
             repository.update_message(record_id, state="failed")
@@ -179,6 +192,73 @@ class LXMFService:
             return str(accessor())
         except Exception:
             return ""
+
+    def _deliver_to_self(self, record_id: int, content: str, title: str | None) -> int:
+        if not self.destination:
+            raise RuntimeError("LXMF destination is not ready")
+
+        message = LXMF.LXMessage(
+            self.destination,
+            self.destination,
+            content,
+            title,
+            desired_method=LXMF.LXMessage.DIRECT,
+        )
+        message.pack()
+        repository.insert_message(
+            {
+                "direction": "inbox",
+                "state": "received",
+                "source_hash": self.address,
+                "destination_hash": self.address,
+                "title": title,
+                "content": content,
+                "lxmf_hash": self._pretty_hex(message.hash),
+                "transport_encryption": "local",
+                "signature_validated": True,
+                "stamp_valid": True,
+                "created_at": time.time(),
+            }
+        )
+        repository.update_message(
+            record_id,
+            state="delivered",
+            lxmf_hash=self._pretty_hex(message.hash),
+            transport_encryption="local",
+        )
+        return record_id
+
+    def _on_outbound_state(self, record_id: int, message: LXMF.LXMessage) -> None:
+        repository.update_message(
+            record_id,
+            state=self._state_name(message.state),
+            lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
+            transport_encryption=str(getattr(message, "transport_encryption", "")),
+            ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
+        )
+
+    def _on_outbound_failure(self, record_id: int, message: LXMF.LXMessage) -> None:
+        repository.update_message(
+            record_id,
+            state=self._state_name(getattr(message, "state", LXMF.LXMessage.FAILED)),
+            lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
+            transport_encryption=str(getattr(message, "transport_encryption", "")),
+            ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
+        )
+
+    @staticmethod
+    def _state_name(state: int | None) -> str:
+        mapping = {
+            LXMF.LXMessage.GENERATING: "generating",
+            LXMF.LXMessage.OUTBOUND: "outbound",
+            LXMF.LXMessage.SENDING: "sending",
+            LXMF.LXMessage.SENT: "sent",
+            LXMF.LXMessage.DELIVERED: "delivered",
+            LXMF.LXMessage.REJECTED: "rejected",
+            LXMF.LXMessage.CANCELLED: "cancelled",
+            LXMF.LXMessage.FAILED: "failed",
+        }
+        return mapping.get(state, "unknown")
 
 
 service = LXMFService()
