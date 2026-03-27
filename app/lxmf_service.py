@@ -406,7 +406,7 @@ class LXMFService:
             self.router.handle_outbound(message)
             repository.update_message(
                 item["id"],
-                state=self._state_name(message.state),
+                state="sending",
                 lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
                 transport_encryption=str(getattr(message, "transport_encryption", "")),
                 ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
@@ -414,7 +414,7 @@ class LXMFService:
                 last_error=None,
             )
             self._log(
-                f"Outbound id={item['id']} queued in LXMF state={self._state_name(message.state)} "
+                f"Outbound id={item['id']} handed to LXMF and now tracked as sending "
                 f"hash={self._pretty_hex(getattr(message, 'hash', None))}"
             )
         except Exception as exc:
