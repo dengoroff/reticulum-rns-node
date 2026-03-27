@@ -61,3 +61,15 @@ def list_messages(direction: str, limit: int = 100) -> list[dict[str, Any]]:
             (direction, limit),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_message(message_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM messages
+            WHERE id = ?
+            """,
+            (message_id,),
+        ).fetchone()
+    return dict(row) if row else None

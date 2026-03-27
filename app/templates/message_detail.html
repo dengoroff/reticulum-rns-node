@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <div class="panel-header detail-header">
+    <div>
+      <h2>Message #{{ message.id }}</h2>
+      <p class="meta-line">{{ message.direction|capitalize }} message</p>
+    </div>
+    <a class="action-link" href="/{{ message.direction }}">Back</a>
+  </div>
+  <dl class="detail-grid">
+    <div>
+      <dt>Direction</dt>
+      <dd>{{ message.direction }}</dd>
+    </div>
+    <div>
+      <dt>State</dt>
+      <dd>{{ message.state }}</dd>
+    </div>
+    <div>
+      <dt>Created</dt>
+      <dd>{{ message.created_at }}</dd>
+    </div>
+    <div>
+      <dt>Updated</dt>
+      <dd>{{ message.updated_at }}</dd>
+    </div>
+    <div>
+      <dt>Source hash</dt>
+      <dd>{{ message.source_hash or "-" }}</dd>
+    </div>
+    <div>
+      <dt>Destination hash</dt>
+      <dd>{{ message.destination_hash or "-" }}</dd>
+    </div>
+    <div>
+      <dt>LXMF hash</dt>
+      <dd>{{ message.lxmf_hash or "-" }}</dd>
+    </div>
+    <div>
+      <dt>Transport encryption</dt>
+      <dd>{{ message.transport_encryption or "-" }}</dd>
+    </div>
+    <div>
+      <dt>Ratchet ID</dt>
+      <dd>{{ message.ratchet_id or "-" }}</dd>
+    </div>
+    <div>
+      <dt>Stamp valid</dt>
+      <dd>{{ message.stamp_valid if message.stamp_valid is not none else "-" }}</dd>
+    </div>
+    <div>
+      <dt>Signature validated</dt>
+      <dd>{{ message.signature_validated if message.signature_validated is not none else "-" }}</dd>
+    </div>
+    <div>
+      <dt>Title</dt>
+      <dd>{{ message.title or "-" }}</dd>
+    </div>
+  </dl>
+  <div class="message-body">
+    <h3>Content</h3>
+    <pre>{{ message.content }}</pre>
+  </div>
+</section>
+{% endblock %}

@@ -15,6 +15,7 @@
           <th>Destination</th>
           <th>Title</th>
           <th>Content</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -26,6 +27,7 @@
           <td>{{ message.destination_hash or "-" }}</td>
           <td>{{ message.title or "-" }}</td>
           <td>{{ message.content }}</td>
+          <td><a class="action-link" href="/messages/{{ message.id }}">View</a></td>
         </tr>
         {% endfor %}
       </tbody>

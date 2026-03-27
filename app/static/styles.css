@@ -102,6 +102,13 @@ dd {
   overflow-x: auto;
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -113,6 +120,23 @@ td {
   border-bottom: 1px solid var(--line);
   padding: 12px 10px;
   vertical-align: top;
+}
+
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  text-decoration: none;
+  background: #fff;
+}
+
+.action-link:hover {
+  border-color: var(--accent);
 }
 
 .form {
@@ -163,6 +187,43 @@ button {
 .peer-list {
   margin: 0;
   padding-left: 18px;
+}
+
+.detail-header {
+  margin-bottom: 18px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.detail-grid div {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+}
+
+.meta-line {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.message-body {
+  margin-top: 18px;
+}
+
+.message-body pre {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
 }
 
 @media (max-width: 800px) {
