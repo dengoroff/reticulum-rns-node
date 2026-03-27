@@ -30,6 +30,59 @@
   </dl>
 </section>
 <section class="panel peer-panel">
+  <h2>Share my QR code</h2>
+  <p class="qr-address qr-encodes">Encodes lxmf://{{ stats.address }}</p>
+  {% if qr_svg %}
+  <div class="qr-card">
+    <button
+      type="button"
+      class="qr-art qr-button"
+      data-qr-open
+      aria-label="Open large QR code"
+    >
+      {{ qr_svg|safe }}
+    </button>
+    <p class="qr-address">{{ stats.address }}</p>
+  </div>
+  <div class="qr-modal" data-qr-modal hidden>
+    <div class="qr-modal-backdrop" data-qr-close></div>
+    <div class="qr-modal-dialog" role="dialog" aria-modal="true" aria-label="Large QR code">
+      <button type="button" class="qr-modal-close" data-qr-close aria-label="Close QR code">Close</button>
+      <div class="qr-modal-art">{{ qr_svg|safe }}</div>
+      <p class="qr-address">{{ stats.address }}</p>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const openButton = document.querySelector("[data-qr-open]");
+      const modal = document.querySelector("[data-qr-modal]");
+      const closeTargets = document.querySelectorAll("[data-qr-close]");
+      if (!openButton || !modal) return;
+
+      const closeModal = () => {
+        modal.hidden = true;
+        document.body.classList.remove("modal-open");
+      };
+
+      openButton.addEventListener("click", () => {
+        modal.hidden = false;
+        document.body.classList.add("modal-open");
+      });
+
+      closeTargets.forEach((node) => node.addEventListener("click", closeModal));
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeModal();
+        }
+      });
+    })();
+  </script>
+  {% else %}
+  <p class="empty">LXMF address not ready yet.</p>
+  {% endif %}
+</section>
+<section class="panel peer-panel">
   <h2>Bootstrap Peers</h2>
   <ul class="peer-list">
     {% for peer in stats.configured_peers %}

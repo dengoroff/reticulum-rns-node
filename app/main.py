@@ -3,11 +3,14 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from contextlib import asynccontextmanager
+from io import BytesIO
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import qrcode
+import qrcode.image.svg
 
 from app.diagnostics import collect_diagnostics
 from app.db import init_db
@@ -41,7 +44,9 @@ def render(request: Request, template: str, **context):
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return render(request, "dashboard.html", stats=service.stats())
+    stats = service.stats()
+    qr_svg = generate_qr_svg(f"lxmf://{stats['address']}") if stats.get("address") else None
+    return render(request, "dashboard.html", stats=stats, qr_svg=qr_svg)
 
 
 @app.get("/inbox", response_class=HTMLResponse)
@@ -122,3 +127,13 @@ async def outbox_api():
 @app.get("/api/diagnostics")
 async def diagnostics_api():
     return collect_diagnostics()
+
+
+def generate_qr_svg(value: str) -> str:
+    qr = qrcode.QRCode(border=1, box_size=8)
+    qr.add_data(value)
+    qr.make(fit=True)
+    image = qr.make_image(image_factory=qrcode.image.svg.SvgPathImage)
+    buffer = BytesIO()
+    image.save(buffer)
+    return buffer.getvalue().decode("utf-8")

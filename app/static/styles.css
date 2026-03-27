@@ -73,6 +73,88 @@ body {
   margin-top: 18px;
 }
 
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.qr-art {
+  display: inline-flex;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.qr-art svg {
+  width: 220px;
+  height: 220px;
+}
+
+.qr-button {
+  cursor: zoom-in;
+}
+
+.qr-modal[hidden] {
+  display: none;
+}
+
+.qr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.qr-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(32, 28, 23, 0.58);
+}
+
+.qr-modal-dialog {
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
+  margin: 5vh auto;
+  padding: 20px;
+  border-radius: 24px;
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 80px rgba(32, 28, 23, 0.24);
+}
+
+.qr-modal-art {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+}
+
+.qr-modal-art svg {
+  width: min(80vw, 420px);
+  height: min(80vw, 420px);
+}
+
+.qr-modal-close {
+  margin-left: auto;
+  display: inline-flex;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.qr-address {
+  margin: 0;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  overflow-wrap: anywhere;
+}
+
+.qr-encodes {
+  margin-bottom: 12px;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
