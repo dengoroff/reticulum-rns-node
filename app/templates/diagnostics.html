@@ -75,7 +75,7 @@
             <td>{{ "ok" if peer.dns_ok else "fail" }}</td>
             <td>{{ "ok" if peer.tcp_ok else "fail" }}</td>
             <td>{{ peer.dns_addresses|join(", ") if peer.dns_addresses else "-" }}</td>
-            <td>{{ peer.last_success_at or "-" }}</td>
+            <td>{{ peer.last_success_at|datetime_ts }}</td>
             <td>{{ peer.consecutive_failures }}</td>
             <td>{{ peer.error or "-" }}</td>
           </tr>

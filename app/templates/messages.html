@@ -11,8 +11,12 @@
         <tr>
           <th>ID</th>
           <th>State</th>
+          {% if title != "Outbox" %}
           <th>Source</th>
+          {% endif %}
+          {% if title != "Inbox" %}
           <th>Destination</th>
+          {% endif %}
           <th>Title</th>
           <th>Content</th>
           <th></th>
@@ -23,8 +27,12 @@
         <tr>
           <td>{{ message.id }}</td>
           <td>{{ message.state }}</td>
+          {% if title != "Outbox" %}
           <td>{{ message.source_hash or "-" }}</td>
+          {% endif %}
+          {% if title != "Inbox" %}
           <td>{{ message.destination_hash or "-" }}</td>
+          {% endif %}
           <td>{{ message.title or "-" }}</td>
           <td>
             {% if message.content|length > 30 %}

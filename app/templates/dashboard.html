@@ -30,6 +30,22 @@
   </dl>
 </section>
 <section class="panel peer-panel">
+  <h2>Network Contribution</h2>
+  <p class="meta-line">
+    This node runs as a Reticulum transport and LXMF propagation participant. It helps route
+    messages, improves reachability, and adds resilience to the wider network.
+  </p>
+  <p class="meta-line">
+    Keeping your node online contributes to the growth of the Reticulum ecosystem.
+  </p>
+  <p class="meta-line">
+    Learn more at
+    <a href="https://reticulum.network" target="_blank" rel="noreferrer">reticulum.network</a>
+    and
+    <a href="https://markqvist.github.io/Reticulum/" target="_blank" rel="noreferrer">the official manual</a>.
+  </p>
+</section>
+<section class="panel peer-panel">
   <h2>Share my QR code</h2>
   <p class="qr-address qr-encodes">Encodes lxmf://{{ stats.address }}</p>
   {% if qr_svg %}
@@ -42,14 +58,11 @@
     >
       {{ qr_svg|safe }}
     </button>
-    <p class="qr-address">{{ stats.address }}</p>
   </div>
   <div class="qr-modal" data-qr-modal hidden>
     <div class="qr-modal-backdrop" data-qr-close></div>
     <div class="qr-modal-dialog" role="dialog" aria-modal="true" aria-label="Large QR code">
-      <button type="button" class="qr-modal-close" data-qr-close aria-label="Close QR code">Close</button>
       <div class="qr-modal-art">{{ qr_svg|safe }}</div>
-      <p class="qr-address">{{ stats.address }}</p>
     </div>
   </div>
   <script>

@@ -4,6 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ title if title else "Reticulum Node" }}</title>
+    <script>
+      (() => {
+        const stored = localStorage.getItem("theme");
+        const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = stored || preferred;
+      })();
+    </script>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -17,10 +24,38 @@
           <a href="/send">Send</a>
           <a href="/diagnostics">Diagnostics</a>
         </nav>
+        <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle color theme" title="Toggle color theme">
+          <span class="theme-toggle-track">
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">☾</span>
+            <span class="theme-toggle-thumb"></span>
+          </span>
+        </button>
       </aside>
       <main class="content">
         {% block content %}{% endblock %}
       </main>
     </div>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const toggle = document.querySelector("[data-theme-toggle]");
+        if (!toggle) return;
+
+        const syncLabel = () => {
+          const theme = root.dataset.theme === "dark" ? "dark" : "light";
+          toggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+        };
+
+        toggle.addEventListener("click", () => {
+          const next = root.dataset.theme === "dark" ? "light" : "dark";
+          root.dataset.theme = next;
+          localStorage.setItem("theme", next);
+          syncLabel();
+        });
+
+        syncLabel();
+      })();
+    </script>
   </body>
 </html>
