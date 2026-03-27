@@ -30,8 +30,13 @@ class LXMFService:
         with self.lock:
             if self.router is not None:
                 return
+            self._log(
+                f"Starting LXMF service with config dir {os.environ.get('RNS_CONFIG_DIR')} and data dir {self.data_path}"
+            )
             self.reticulum = RNS.Reticulum(configdir=os.environ.get("RNS_CONFIG_DIR"))
+            self._log("Reticulum instance initialised")
             self.router = LXMF.LXMRouter(storagepath=str(self.data_path))
+            self._log(f"LXMRouter initialised with storage path {self.data_path}")
             self.identity = self._load_or_create_identity()
             self.destination = self.router.register_delivery_identity(
                 self.identity,
@@ -40,13 +45,19 @@ class LXMFService:
             )
             self.router.register_delivery_callback(self._on_delivery)
             self.router.announce(self.destination.hash)
+            self._log(
+                f"Registered LXMF delivery identity {self.address} with display name '{self.display_name}'"
+            )
+            self._log("Initial LXMF announce sent")
             self.announce_thread = threading.Thread(target=self._announce_loop, daemon=True)
             self.announce_thread.start()
 
     def _load_or_create_identity(self) -> RNS.Identity:
         identity_path = self.data_path / "web-ui.identity"
         if identity_path.exists():
+            self._log(f"Loading existing identity from {identity_path}")
             return RNS.Identity.from_file(str(identity_path))
+        self._log(f"Creating new identity at {identity_path}")
         identity = RNS.Identity()
         identity.to_file(str(identity_path))
         return identity
@@ -56,12 +67,21 @@ class LXMFService:
             time.sleep(max(self.announce_interval, 300))
             try:
                 if self.router and self.destination:
+                    self._log(
+                        f"Sending periodic LXMF announce for {self.address}, interval {self.announce_interval}s"
+                    )
                     self.router.announce(self.destination.hash)
             except Exception:
                 RNS.log("Failed to announce LXMF destination", RNS.LOG_ERROR)
 
     def _on_delivery(self, message: LXMF.LXMessage) -> None:
         content = self._as_string(message.content_as_string)
+        self._log(
+            "Inbound LXMF received "
+            f"from={self._pretty_hex(message.source_hash)} "
+            f"to={self._pretty_hex(message.destination_hash)} "
+            f"hash={self._pretty_hex(getattr(message, 'hash', None))}"
+        )
         repository.insert_message(
             {
                 "direction": "inbox",
@@ -100,19 +120,36 @@ class LXMFService:
                 "created_at": time.time(),
             }
         )
+        self._log(
+            f"Outbound request accepted id={record_id} destination={normalized_destination} "
+            f"title={title!r} bytes={len(content.encode('utf-8'))}"
+        )
 
         if destination_hash == self.destination.hash:
+            self._log(f"Outbound id={record_id} resolved as self-send")
             return self._deliver_to_self(record_id, content, title)
 
-        if not RNS.Transport.has_path(destination_hash):
+        has_path = RNS.Transport.has_path(destination_hash)
+        self._log(f"Outbound id={record_id} initial path known={has_path}")
+        if not has_path:
+            self._log(f"Outbound id={record_id} requesting path to {normalized_destination}")
             RNS.Transport.request_path(destination_hash)
             deadline = time.time() + 20
             while time.time() < deadline and not RNS.Transport.has_path(destination_hash):
                 time.sleep(0.25)
+            has_path = RNS.Transport.has_path(destination_hash)
+            self._log(f"Outbound id={record_id} path request complete known={has_path}")
 
         recipient_identity = RNS.Identity.recall(destination_hash)
         if recipient_identity is None:
+            repository.update_message(record_id, state="failed")
+            self._log(
+                f"Outbound id={record_id} failed because destination identity {normalized_destination} "
+                "is still unknown after path handling",
+                level=RNS.LOG_ERROR,
+            )
             raise ValueError("Destination identity is unknown. Wait for an announce and try again.")
+        self._log(f"Outbound id={record_id} destination identity recalled successfully")
 
         dest = RNS.Destination(
             recipient_identity,
@@ -132,6 +169,9 @@ class LXMFService:
         message.register_delivery_callback(lambda msg: self._on_outbound_state(record_id, msg))
         message.register_failed_callback(lambda msg: self._on_outbound_failure(record_id, msg))
         try:
+            self._log(
+                f"Outbound id={record_id} handing message to LXMF router with desired method DIRECT"
+            )
             self.router.handle_outbound(message)
             repository.update_message(
                 record_id,
@@ -140,8 +180,13 @@ class LXMFService:
                 transport_encryption=str(getattr(message, "transport_encryption", "")),
                 ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
             )
+            self._log(
+                f"Outbound id={record_id} queued in LXMF state={self._state_name(message.state)} "
+                f"hash={self._pretty_hex(getattr(message, 'hash', None))}"
+            )
         except Exception:
             repository.update_message(record_id, state="failed")
+            self._log(f"Outbound id={record_id} router handling raised an exception", level=RNS.LOG_ERROR)
             raise
         return record_id
 
@@ -226,24 +271,38 @@ class LXMFService:
             lxmf_hash=self._pretty_hex(message.hash),
             transport_encryption="local",
         )
+        self._log(
+            f"Outbound id={record_id} delivered locally to self hash={self._pretty_hex(message.hash)}"
+        )
         return record_id
 
     def _on_outbound_state(self, record_id: int, message: LXMF.LXMessage) -> None:
+        state_name = self._state_name(message.state)
         repository.update_message(
             record_id,
-            state=self._state_name(message.state),
+            state=state_name,
             lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
             transport_encryption=str(getattr(message, "transport_encryption", "")),
             ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
         )
+        self._log(
+            f"Outbound id={record_id} delivery callback state={state_name} "
+            f"hash={self._pretty_hex(getattr(message, 'hash', None))}"
+        )
 
     def _on_outbound_failure(self, record_id: int, message: LXMF.LXMessage) -> None:
+        state_name = self._state_name(getattr(message, "state", LXMF.LXMessage.FAILED))
         repository.update_message(
             record_id,
-            state=self._state_name(getattr(message, "state", LXMF.LXMessage.FAILED)),
+            state=state_name,
             lxmf_hash=self._pretty_hex(getattr(message, "hash", None)),
             transport_encryption=str(getattr(message, "transport_encryption", "")),
             ratchet_id=self._pretty_hex(getattr(message, "ratchet_id", None)),
+        )
+        self._log(
+            f"Outbound id={record_id} failure callback state={state_name} "
+            f"hash={self._pretty_hex(getattr(message, 'hash', None))}",
+            level=RNS.LOG_ERROR,
         )
 
     @staticmethod
@@ -259,6 +318,10 @@ class LXMFService:
             LXMF.LXMessage.FAILED: "failed",
         }
         return mapping.get(state, "unknown")
+
+    @staticmethod
+    def _log(message: str, level: int = RNS.LOG_NOTICE) -> None:
+        RNS.log(f"[web-ui] {message}", level)
 
 
 service = LXMFService()
