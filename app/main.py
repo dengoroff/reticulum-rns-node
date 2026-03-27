@@ -58,6 +58,12 @@ async def diagnostics(request: Request):
     return render(request, "diagnostics.html", diagnostics=collect_diagnostics(), title="Diagnostics")
 
 
+@app.post("/announce")
+async def announce_now():
+    service.announce_now("manual-ui")
+    return RedirectResponse(url="/diagnostics", status_code=303)
+
+
 @app.get("/messages/{message_id}", response_class=HTMLResponse)
 async def message_details(request: Request, message_id: int):
     message = get_message(message_id)

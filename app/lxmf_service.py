@@ -314,6 +314,9 @@ class LXMFService:
         self.router.announce(self.destination.hash)
         self._log(f"LXMF announce sent for {self.address} reason={reason}")
 
+    def announce_now(self, reason: str = "manual") -> None:
+        self._emit_announce(reason)
+
     @staticmethod
     def _state_name(state: int | None) -> str:
         mapping = {

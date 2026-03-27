@@ -139,6 +139,12 @@ td {
   border-color: var(--accent);
 }
 
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .form {
   display: grid;
   gap: 16px;
@@ -172,6 +178,12 @@ button {
   color: #fff;
   background: linear-gradient(135deg, var(--accent), var(--accent-dark));
   cursor: pointer;
+}
+
+.secondary-button {
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--line);
 }
 
 .notice.error {
