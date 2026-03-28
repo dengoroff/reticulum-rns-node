@@ -197,7 +197,7 @@ class LXMFService:
             "uptime_seconds": int(time.time() - self.started_at),
             "transport_enabled": True,
             "configured_peers": configured_peers,
-            "known_paths": self._transport_count("PATHFINDER_M"),
+            "known_paths": self._transport_count("path_table"),
             "announces": self._transport_count("announce_table"),
         }
 
